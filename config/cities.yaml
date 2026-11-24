@@ -1,0 +1,7 @@
+cities:
+  - key: den_haag
+    name: Den Haag
+    municipality: "'s-Gravenhage"
+    lat: 52.0767
+    lon: 4.2986
+    radius_km: 10
