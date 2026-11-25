@@ -4,7 +4,7 @@
 
 🔗 **Live site:** https://ammar-alsharai.github.io/city-delta/
 
-![CityDelta website](docs/img/website.png)
+
 
 ---
 
@@ -21,16 +21,16 @@ It is a data engineering project first. The goal is a pipeline that is increment
 ```mermaid
 flowchart LR
   subgraph Sources
-    A[KOOP SRU API<br/>official notices<br/>namespaced XML]
-    B[NDW open data<br/>road works and closures<br/>DATEX II XML, gzip]
-    C[Open-Meteo<br/>hourly forecast<br/>JSON]
+    A["KOOP SRU API<br/>official notices<br/>XML"]
+    B["NDW open data<br/>road works<br/>DATEX II, gzip"]
+    C["Open-Meteo<br/>weather<br/>JSON"]
   end
 
-  subgraph Databricks["Databricks (Unity Catalog: city_delta)"]
+  subgraph DBX["Databricks · city_delta"]
     direction LR
-    BR[(bronze<br/>raw files in a Volume<br/>+ raw Delta tables)]
-    SI[(silver<br/>parsed, typed,<br/>deduplicated with MERGE)]
-    GO[(gold<br/>badges, daily activity,<br/>weekly notices, data health)]
+    BR[("bronze<br/>raw files<br/>raw tables")]
+    SI[("silver<br/>parsed<br/>MERGE")]
+    GO[("gold<br/>badges<br/>metrics<br/>checks")]
     BR --> SI --> GO
   end
 
@@ -38,13 +38,12 @@ flowchart LR
   B --> BR
   C --> BR
 
-  GO -->|SQL Statement API<br/>GitHub Action, daily| J[docs/data/*.json]
-  J --> W[GitHub Pages<br/>public website]
+  GO -->|"GitHub Action<br/>daily"| J["JSON<br/>export"]
+  J --> W["GitHub Pages<br/>website"]
 ```
 
 One Databricks Job runs the ten notebooks every day at 06:00 (Europe/Amsterdam). The three ingests run in parallel, each source has its own silver step, and everything joins in gold.
 
-![Databricks Job run](docs/img/job-graph.png)
 
 At 06:40 UTC a GitHub Action queries the gold tables through the Databricks SQL Statement API, writes six small JSON files and commits them. GitHub Pages serves them to the website.
 
@@ -103,7 +102,7 @@ Raw files (XML pages, the NDW `.gz` file, the weather JSON) are also archived in
 | Situations without coordinates or with an approximate location | Kept in the data, hidden from the map |
 | Share of notices with an unknown stage | Tracks how well the title parsing works |
 
-![Data checks](docs/img/data-health.png)
+
 
 ## Repository structure
 
