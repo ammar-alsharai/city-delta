@@ -280,95 +280,14 @@ sug.addEventListener("mousedown", e => { const li = e.target.closest("li[data-i]
 q.addEventListener("blur", () => setTimeout(() => { sug.hidden = true; }, 150));
 $("searchForm").addEventListener("submit", e => { e.preventDefault(); if (hits.length) pick(Math.max(cursor, 0)); });
 
-/* ---------- charts ---------- */
-function chart(id, draw) {
-  const el = $(id);
-  const go = () => { const W = el.clientWidth, H = el.clientHeight; if (W > 0) el.innerHTML = draw(W, H); };
-  const ro = new ResizeObserver(go); ro.observe(el);
-}
-const niceMax = v => { const p = 10 ** Math.floor(Math.log10(v || 1)); return Math.ceil(v / p * 2) / 2 * p; };
-const STRIPES = `<defs><pattern id="stripes" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#ffffff"/><rect width="4" height="8" fill="#d7262e"/></pattern></defs>`;
-
-function drawWorks(W, H) {
-  const rows = D.daily.filter(d => d.day >= today()).slice(0, 14);
-  const m = {l: 8, r: 8, t: 22, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const max = niceMax(Math.max(...rows.map(d => d.active_works)));
-  const bw = iw / rows.length, gap = Math.min(8, bw * 0.25);
-  const every = bw < 34 ? 2 : 1;
-  const y = v => m.t + ih - v / max * ih;
-  return `<svg>${STRIPES}${rows.map((d, i) => {
-    const x = m.l + i * bw + gap / 2, w = bw - gap;
-    const lbl = i % every ? "" : `<text x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${bw < 40 ? toD(d.day).getUTCDate() : wdDay(d.day)}</text>`;
-    return `<rect x="${x}" y="${y(d.active_works)}" width="${w}" height="${ih - (y(d.active_works) - m.t)}" fill="#7fa3d9" rx="2"/>
-      <rect x="${x}" y="${y(d.active_closures)}" width="${w}" height="${ih - (y(d.active_closures) - m.t)}" fill="url(#stripes)" stroke="#d7262e" stroke-width="1"/>
-      ${i % every ? "" : `<text class="v" x="${x + w / 2}" y="${y(d.active_works) - 6}" text-anchor="middle">${d.active_works}</text>`}${lbl}`;
-  }).join("")}<line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--ink)"/></svg>`;
-}
-
-function weeklyRows() {
-  const by = {};
-  D.weekly.forEach(r => { by[r.week] = by[r.week] || {}; by[r.week][r.category] = (by[r.week][r.category] || 0) + r.notices; });
-  return Object.keys(by).sort().map(w => ({week: w, ...by[w], total: Object.values(by[w]).reduce((a, b) => a + b, 0)}));
-}
-function drawWeekly(W, H) {
-  const rows = weeklyRows();
-  const m = {l: 8, r: 8, t: 22, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const max = niceMax(Math.max(...rows.map(r => r.total)));
-  const bw = iw / rows.length, gap = Math.min(28, bw * 0.35);
-  return `<svg>${rows.map((r, i) => {
-    const x = m.l + i * bw + gap / 2, w = bw - gap;
-    let acc = 0;
-    const segs = NOTICE_CATS.map(c => {
-      const v = r[c] || 0; if (!v) return "";
-      const y0 = m.t + ih - (acc + v) / max * ih, h = v / max * ih; acc += v;
-      return `<rect x="${x}" y="${y0}" width="${w}" height="${Math.max(h - 1, 0.5)}" fill="${CATS[c].color}"/>`;
-    }).join("");
-    const top = m.t + ih - r.total / max * ih;
-    const lab = W < 420 ? fmtDay(r.week) : `Week of ${fmtDay(r.week)}`;
-    return `${segs}<text class="v" x="${x + w / 2}" y="${top - 6}" text-anchor="middle">${r.total}</text>
-      <text x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${lab}</text>`;
-  }).join("")}<line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--ink)"/></svg>`;
-}
-
-function drawWeather(W, H) {
-  const rows = D.w;
-  const m = {l: 34, r: 40, t: 24, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const temps = rows.map(r => r.temp);
-  const tMin = Math.floor(Math.min(...temps) - 1), tMax = Math.ceil(Math.max(...temps) + 1);
-  const x = i => m.l + i / (rows.length - 1) * iw;
-  const yT = v => m.t + ih - (v - tMin) / (tMax - tMin) * ih;
-  const yR = v => m.t + ih - v / 100 * ih;
-  const bw = Math.max(iw / rows.length - 0.6, 0.8);
-  const bars = rows.map((r, i) => `<rect x="${x(i) - bw / 2}" y="${yR(r.rain_pct)}" width="${bw}" height="${m.t + ih - yR(r.rain_pct)}" fill="${r.rain_pct >= 60 ? "#1b6fd8" : "#9cc3f5"}"/>`).join("");
-  const line = rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${yT(r.temp).toFixed(1)}`).join("");
-  const days = rows.map((r, i) => [r, i]).filter(([r]) => r.t.slice(11, 13) === "00");
-  const dayMarks = days.map(([r, i]) => `<line x1="${x(i)}" x2="${x(i)}" y1="${m.t}" y2="${m.t + ih}" stroke="var(--line)"/>
-    <text x="${x(i) + 4}" y="${H - 8}">${W < 520 ? toD(r.t).getUTCDate() : wdDay(r.t)}</text>`).join("");
-  const peak = rows.reduce((a, r, i) => r.rain_pct > a.v ? {v: r.rain_pct, i} : a, {v: -1, i: 0});
-  const px = x(peak.i), anchor = px > W - 140 ? "end" : "start";
-  const note = peak.v >= 30 ? `<text class="v" x="${px + (anchor === "end" ? -6 : 6)}" y="${yR(peak.v) - 6}" text-anchor="${anchor}">${peak.v}% rain, ${wdDay(rows[peak.i].t)}</text>` : "";
-  const ticksT = [tMin, Math.round((tMin + tMax) / 2), tMax].map(v => `<text x="${m.l - 6}" y="${yT(v) + 4}" text-anchor="end">${v}°</text>`).join("");
-  const ticksR = [0, 50, 100].map(v => `<text x="${W - m.r + 6}" y="${yR(v) + 4}">${v}%</text>`).join("");
-  return `<svg>${dayMarks}${bars}<path d="${line}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>${ticksT}${ticksR}${note}
-    <line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--ink)"/></svg>`;
-}
-
-function drawRhythmText() {
-  const td = D.daily.find(d => d.day === today());
-  if (td) $("rhythmLead").textContent = `Today ${td.active_works} road works are running across Den Haag, ${td.active_closures} of them with a road closed. Figures cover the whole city, not only your radius.`;
-  const wk = weeklyRows(), last4 = wk.slice(-4).reduce((a, r) => a + r.total, 0);
-  $("capWeekly").textContent = `${last4.toLocaleString("en")} new official notices in the last 4 weeks`;
-  const busiest = D.daily.filter(d => d.day >= today()).slice(0, 14).reduce((a, d) => d.active_works > a.active_works ? d : a);
-  $("capWorks").textContent = `Busiest day for road works: ${wdDay(busiest.day)} ${MON[toD(busiest.day).getUTCMonth()]}, with ${busiest.active_works}`;
-  const wet = {};
-  D.w.forEach(w => { const h = +w.t.slice(11, 13); if (h >= 7 && h <= 22) wet[w.t.slice(0, 10)] = Math.max(wet[w.t.slice(0, 10)] || 0, w.rain_pct); });
-  const risky = Object.keys(wet).filter(k => wet[k] >= 60);
-  $("capWeather").textContent = risky.length ? `Rain likely on ${risky.map(wdDay).join(" and ")}` : "A mostly dry week ahead";
-  const used = NOTICE_CATS.filter(c => D.weekly.some(r => r.category === c));
-  $("keyWeekly").innerHTML = used.map(c => `<span><i class="sw" style="background:${CATS[c].color}"></i>${esc(CATS[c].label)}</span>`).join("");
-}
-
 /* ---------- data checks ---------- */
+function rule(t) {
+  if (!t || /info/.test(t)) return "For information only";
+  const s = t.replace(/warn/g, "warning").replace(/fail/g, "failure")
+    .replace(/\s*>\s*/g, " above ").replace(/\s*<\s*/g, " below ").replace(/\s*=\s*/g, " at ")
+    .replace(/ %/g, "%");
+  return s[0].toUpperCase() + s.slice(1);
+}
 function drawHealth() {
   const fmtV = h => {
     const v = h.value == null ? "n/a" : (Number.isInteger(h.value) ? h.value.toLocaleString("en") : (+h.value).toFixed(1));
@@ -379,24 +298,34 @@ function drawHealth() {
   $("checks").tBodies[0].innerHTML = D.health.map(h => `<tr>
     <td data-l="Source">${esc(SOURCES[h.source] || h.source)}</td>
     <td data-l="Check">${esc(name(h.check))}${h.detail ? `<span class="note">${esc(h.detail)}</span>` : ""}</td>
-    <td class="num" data-l="Value">${esc(fmtV(h))}</td><td data-l="Threshold">${esc(h.threshold)}</td>
+    <td class="num" data-l="Value">${esc(fmtV(h))}</td><td data-l="Alert rule">${esc(rule(h.threshold))}</td>
     <td data-l="Status"><span class="st ${esc(h.status)}">${esc(h.status)}</span></td></tr>`).join("");
   const bad = D.health.filter(h => h.status !== "OK").length;
   $("checksTitle").textContent = bad ? `${bad} of ${D.health.length} data checks need attention` : `All ${D.health.length} data checks passed this morning`;
 }
 
+/* ---------- light / dark switch ---------- */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("cd-theme", t); } catch (e) {}
+  const next = t === "dark" ? "light" : "dark";
+  $("theme").setAttribute("aria-label", `Switch to ${next} mode`);
+  $("themeLbl").textContent = next === "dark" ? "Dark" : "Light";
+}
+applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+$("theme").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+
 /* ---------- boot ---------- */
-const files = ["meta", "happenings", "weather", "daily", "weekly", "health"];
+const files = ["meta", "happenings", "weather", "health"];
 Promise.all(files.map(f => fetch(`data/${f}.json`, {cache: "no-cache"}).then(r => { if (!r.ok) throw new Error(f); return r.json(); })))
-  .then(([meta, h, w, daily, weekly, health]) => {
-    Object.assign(D, {meta, h: h.filter(r => r.lat != null && r.lon != null), w, daily, weekly, health});
+  .then(([meta, h, w, health]) => {
+    Object.assign(D, {meta, h: h.filter(r => r.lat != null && r.lon != null), w, health});
     const g = new Date(meta.generated_at);
     $("asof").textContent = `Updated ${g.getDate()} ${MON[g.getMonth()]}, ${String(g.getHours()).padStart(2, "0")}:${String(g.getMinutes()).padStart(2, "0")}`;
     $("cityName").textContent = meta.city.name;
     $("sample").hidden = !meta.sample;
     drawControls(); initMap(); render(true);
-    drawRhythmText(); drawHealth();
-    chart("figWorks", drawWorks); chart("figWeekly", drawWeekly); chart("figWeather", drawWeather);
+    drawHealth();
   })
   .catch(() => {
     $("headline").textContent = "Today's data could not be loaded";
