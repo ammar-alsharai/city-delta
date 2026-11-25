@@ -2,15 +2,17 @@
    and renders the map, list, charts and data checks. No build step, no framework. */
 {
 const CATS = {
-  road_works:      {label: "Road works",          color: "#e8590c"},
-  street_works:    {label: "Street works",        color: "#b7791f"},
-  road_event:      {label: "Events on the road",  color: "#7b3fc4"},
-  event_permit:    {label: "Event permits",       color: "#c2417f"},
-  building_works:  {label: "Building permits",    color: "#1a4fa0"},
-  tree_felling:    {label: "Tree felling",        color: "#2f855a"},
-  traffic_measure: {label: "Traffic decisions",   color: "#0f7c8c"},
-  other:           {label: "Other notices",       color: "#7a8591"},
+  event_permit:    {label: "Event permits",       color: "#c2185b", group: "events"},
+  road_event:      {label: "Events on the road",  color: "#7b3fc4", group: "events"},
+  road_works:      {label: "Road works",          color: "#e8590c", group: "works"},
+  street_works:    {label: "Street works",        color: "#b7791f", group: "works"},
+  building_works:  {label: "Building permits",    color: "#1a4fa0", group: "notices"},
+  tree_felling:    {label: "Tree felling",        color: "#2f855a", group: "notices"},
+  traffic_measure: {label: "Traffic decisions",   color: "#0f7c8c", group: "notices"},
+  other:           {label: "Other notices",       color: "#7a8591", group: "notices"},
 };
+const GROUPS = [["events", "Events"], ["works", "Works and closures"], ["notices", "Permits and notices"]];
+const isEvent = r => (CATS[r.cat] || {}).group === "events";
 const NOTICE_CATS = ["building_works", "street_works", "tree_felling", "event_permit", "traffic_measure", "other"];
 const PLACES = [
   {id: "centraal", label: "Den Haag Centraal", lat: 52.0809, lon: 4.3248},
@@ -95,16 +97,6 @@ $("cats").addEventListener("click", e => {
   st.shown = PAGE; render(false);
 });
 $("more").addEventListener("click", () => { st.shown += PAGE; render(false); });
-$("locate").addEventListener("click", () => {
-  const btn = $("locate");
-  if (!navigator.geolocation) { btn.textContent = "Location is not available"; return; }
-  btn.textContent = "Finding you";
-  navigator.geolocation.getCurrentPosition(
-    p => { btn.textContent = "Use my location"; setCentre(p.coords.latitude, p.coords.longitude, "your location", null); },
-    () => { btn.textContent = "Location blocked, search instead"; },
-    {timeout: 8000});
-});
-
 function setCentre(lat, lon, label, placeId, keepZoom) {
   Object.assign(st, {lat, lon, label, place: placeId, shown: PAGE, sel: null});
   drawControls(); render(!keepZoom);
@@ -116,13 +108,15 @@ function render(fit) {
   const R = st.r * 1000;
   const inR = base.filter(x => x.d <= R);
   const shown = inR.filter(x => !st.off.has(x.r.cat)).sort((a, b) => a.d - b.d);
-  const n = shown.length;
-
-  $("headline").textContent = n
-    ? `${n.toLocaleString("en")} ${n === 1 ? "thing" : "things"} happening within ${radLabel(st.r)} of ${st.label}`
-    : `Nothing found within ${radLabel(st.r)} of ${st.label}`;
+  shown.sort((a, b) => (isEvent(b.r) - isEvent(a.r)) || (a.d - b.d));   // events first, then nearest
+  const n = shown.length, ev = shown.filter(x => isEvent(x.r)).length, rest = n - ev;
+  const where = `within ${radLabel(st.r)} of ${st.label}`;
+  const things = k => `${k.toLocaleString("en")} ${k === 1 ? "other change" : "other changes"}`;
+  $("headline").textContent = !n ? `Nothing found ${where}`
+    : ev ? `${ev} ${ev === 1 ? "event" : "events"} and ${things(rest)} ${where}`
+    : `No events, but ${things(rest).replace("other ", "")} ${where}`;
   const pText = {today: "today", week: "in the next 7 days", month: "in the next 30 days"}[st.p];
-  $("subline").textContent = `Road works and events ${pText}, plus official notices published in the last 30 days.`;
+  $("subline").textContent = `Events, road works and closures ${pText}, plus official notices from the last 30 days.`;
 
   // figures
   const closed = shown.filter(x => isClosed(x.r)).length;
@@ -132,9 +126,9 @@ function render(fit) {
   const hours = D.w.filter(w => w.t.slice(0, 10) >= t && w.t.slice(0, 10) <= end && +w.t.slice(11, 13) >= 7 && +w.t.slice(11, 13) <= 22);
   const rain = hours.length ? Math.max(...hours.map(w => w.rain_pct)) : null;
   const fig = [
+    [events, events === 1 ? "event" : "events", false],
     [closed, closed === 1 ? "road closed" : "roads closed", closed > 0],
     [works, works === 1 ? "work site" : "work sites", false],
-    [events, events === 1 ? "event" : "events", false],
     [rain == null ? "n/a" : rain + "%", "max rain chance", rain >= 60],
   ];
   $("figures").innerHTML = fig.map(([v, l, a]) => `<div class="fgr${a ? " alert" : ""}"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
@@ -142,15 +136,18 @@ function render(fit) {
   // category chips with counts in radius
   const counts = {};
   inR.forEach(x => { counts[x.r.cat] = (counts[x.r.cat] || 0) + 1; });
-  $("cats").innerHTML = Object.entries(CATS).filter(([k]) => counts[k] || st.off.has(k)).map(([k, c]) =>
-    `<button type="button" class="cat" data-cat="${k}" aria-pressed="${!st.off.has(k)}"><i style="background:${c.color}"></i>${esc(c.label)} <em>${counts[k] || 0}</em></button>`).join("");
+  $("cats").innerHTML = GROUPS.map(([g, title]) => {
+    const chips = Object.entries(CATS).filter(([k, c]) => c.group === g).map(([k, c]) =>
+      `<button type="button" class="cat" data-cat="${k}" aria-pressed="${!st.off.has(k)}"><i style="background:${c.color}"></i>${esc(c.label)} <em>${counts[k] || 0}</em></button>`).join("");
+    return `<div class="cgroup"><span class="lbl">${esc(title)}</span><div class="chips">${chips}</div></div>`;
+  }).join("");
 
   // list
   const list = shown.slice(0, st.shown);
   $("list").innerHTML = list.length ? list.map(({r, d}) => {
     const c = CATS[r.cat] || CATS.other;
     const stage = STAGE[r.stage] ? `<span>${esc(STAGE[r.stage])}</span>` : "";
-    return `<li class="item${st.sel === r.id ? " on" : ""}" data-id="${esc(r.id)}" tabindex="0">
+    return `<li class="item${st.sel === r.id ? " on" : ""}${isEvent(r) ? " ev" : ""}" data-id="${esc(r.id)}" tabindex="0">
       <span class="dot${isClosed(r) ? " closed" : ""}" style="background:${c.color}"></span>
       <h3>${esc(r.title)}</h3><span class="dist">${fmtDist(d)}</span>
       <div class="meta"><span>${esc(c.label)}</span>${stage}<span>${esc(whenText(r))}</span></div>${badgeHtml(r)}</li>`;
@@ -158,7 +155,7 @@ function render(fit) {
   $("more").hidden = shown.length <= st.shown;
   $("more").textContent = `Show ${Math.min(PAGE, shown.length - st.shown)} more of ${shown.length - st.shown}`;
 
-  drawMap(base.filter(x => !st.off.has(x.r.cat)), R, fit);
+  drawMap(shown, R, fit);
 }
 
 $("list").addEventListener("click", e => { const li = e.target.closest(".item"); if (li) focusItem(li.dataset.id); });
@@ -217,13 +214,17 @@ function drawMap(rows, R, fit) {
   M.circle.setLatLng([st.lat, st.lon]).setRadius(R);
   M.you.setLatLng([st.lat, st.lon]);
   // far pins first so near ones sit on top
-  rows.sort((a, b) => b.d - a.d).forEach(({r, d}) => {
-    const near = d <= R, c = (CATS[r.cat] || CATS.other).color;
-    const m = isClosed(r)
-      ? L.marker([r.lat, r.lon], {icon: L.divIcon({className: "barrier"}), opacity: near ? 1 : 0.3, keyboard: false})
-      : L.circleMarker([r.lat, r.lon], {renderer: M.renderer, radius: near ? 7 : 5, color: "#fff", weight: 1.5,
-          fillColor: c, fillOpacity: near ? 0.95 : 0.3, opacity: near ? 1 : 0.3});
-    m.on("click", () => {
+  // far pins first so near ones sit on top; events drawn last so they stay visible
+  [...rows].sort((a, b) => (isEvent(a.r) - isEvent(b.r)) || (b.d - a.d)).forEach(({r, d}) => {
+    const c = (CATS[r.cat] || CATS.other).color;
+    const m = isEvent(r)
+      ? L.marker([r.lat, r.lon], {icon: L.divIcon({className: "evpin", html: `<span style="background:${c}"></span>`}), keyboard: false, zIndexOffset: 500})
+      : isClosed(r)
+      ? L.marker([r.lat, r.lon], {icon: L.divIcon({className: "barrier"}), keyboard: false})
+      : L.circleMarker([r.lat, r.lon], {renderer: M.renderer, radius: 7, color: "#fff", weight: 1.5,
+          fillColor: c, fillOpacity: 0.95, bubblingMouseEvents: false});
+    m.on("click", e => {
+      if (e.originalEvent) L.DomEvent.stopPropagation(e);   // a pin click must not move the circle
       m.unbindPopup().bindPopup(popHtml(r, d), {maxWidth: 300}).openPopup();
       st.sel = r.id;
       document.querySelectorAll(".item.on").forEach(el => el.classList.remove("on"));
