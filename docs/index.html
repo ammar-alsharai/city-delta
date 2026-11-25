@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CityDelta Den Haag</title>
+<meta name="description" content="What is changing around any address in Den Haag: road works, closures, permits, events and weather, refreshed daily from open government data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="./" aria-label="CityDelta home">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect x="2" y="2" width="36" height="36" rx="7" fill="#ffc917"/><path d="M20 9 31 30H9Z" fill="none" stroke="#13202b" stroke-width="3.5" stroke-linejoin="round"/></svg>
+    <span class="name">CityDelta</span>
+    <span class="city" id="cityName">Den Haag</span>
+  </a>
+  <form class="search" id="searchForm" role="search" autocomplete="off">
+    <label class="sr" for="q">Search an address or postcode</label>
+    <input id="q" type="search" placeholder="Search an address or postcode" aria-autocomplete="list" aria-controls="suggest">
+    <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+  </form>
+  <p class="asof" id="asof">Loading today's data</p>
+</header>
+
+<main class="app">
+  <section class="rail" aria-label="What's happening">
+    <div class="intro">
+      <h1 id="headline">Loading what's happening nearby</h1>
+      <p class="sub" id="subline">Road works, closures, permits and events from open government data.</p>
+      <p class="sample" id="sample" hidden>Showing sample data until the first daily export runs.</p>
+    </div>
+
+    <div class="places" id="places" aria-label="Quick places"></div>
+
+    <div class="controls">
+      <div class="group" role="group" aria-labelledby="lblRadius">
+        <span class="lbl" id="lblRadius">Radius</span>
+        <div class="seg" id="radius"></div>
+      </div>
+      <div class="group" role="group" aria-labelledby="lblPeriod">
+        <span class="lbl" id="lblPeriod">When</span>
+        <div class="seg" id="period"></div>
+      </div>
+      <button class="locate" id="locate" type="button">Use my location</button>
+    </div>
+
+    <div class="figures" id="figures"></div>
+
+    <div class="cats" id="cats" aria-label="Show categories"></div>
+
+    <ol class="list" id="list" aria-live="polite"></ol>
+    <button class="more" id="more" type="button" hidden>Show more</button>
+  </section>
+
+  <section class="mapwrap" aria-label="Map">
+    <div id="map" class="map"></div>
+    <p class="maphint">Click the map to look around another spot.</p>
+  </section>
+</main>
+
+<section class="band rhythm" aria-labelledby="hRhythm">
+  <div class="inner">
+    <h2 id="hRhythm">The city this month</h2>
+    <p class="lead" id="rhythmLead">Daily activity across the whole city, not only your radius.</p>
+    <div class="charts">
+      <figure class="card">
+        <figcaption id="capWorks">Road works active per day, next 14 days</figcaption>
+        <div class="fig" id="figWorks"></div>
+        <p class="key"><span><i class="sw works"></i>Works without closure</span><span><i class="sw closed"></i>Road closed</span></p>
+      </figure>
+      <figure class="card">
+        <figcaption id="capWeekly">New official notices per week</figcaption>
+        <div class="fig" id="figWeekly"></div>
+        <p class="key" id="keyWeekly"></p>
+      </figure>
+      <figure class="card wide">
+        <figcaption id="capWeather">Next 7 days of weather</figcaption>
+        <div class="fig short" id="figWeather"></div>
+        <p class="key"><span><i class="sw temp"></i>Temperature °C</span><span><i class="sw rain"></i>Chance of rain %</span><span><i class="sw risk"></i>Rain risk, 60% or more</span></p>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="band health" aria-labelledby="hHealth">
+  <div class="inner">
+    <h2 id="hHealth">How this page is built</h2>
+    <p class="lead">Every morning a Databricks job pulls three public sources into a Delta Lake model, checks the data, and publishes it here.</p>
+    <ol class="route" id="route">
+      <li><b>Sources</b><span>Officiële bekendmakingen, NDW Melvin road works, Open-Meteo</span></li>
+      <li><b>Bronze</b><span>Raw XML, DATEX II and JSON, archived as received</span></li>
+      <li><b>Silver</b><span>Parsed, typed and deduplicated with MERGE</span></li>
+      <li><b>Gold</b><span>Badges, daily activity and data health</span></li>
+      <li><b>This page</b><span>Exported as JSON by a GitHub Action</span></li>
+    </ol>
+    <div class="checks">
+      <h3 id="checksTitle">Data checks</h3>
+      <div class="scroll"><table class="stack" id="checks"><thead><tr><th>Source</th><th>Check</th><th>Value</th><th>Threshold</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="inner">
+    <p><b>CityDelta</b> is an independent portfolio project, not affiliated with Gemeente Den Haag. Information only: always check the official source before you rely on it.</p>
+    <p>Data: Officiële bekendmakingen (KOOP), NDW Melvin (CC0), weather by <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0). Map: BRT Achtergrondkaart, Kadaster via PDOK (CC BY 4.0). Address search: PDOK Locatieserver.</p>
+    <p><a href="https://github.com/ammar-alsharai/city-delta">Source code on GitHub</a></p>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
