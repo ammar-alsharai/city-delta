@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CityDelta Den Haag</title>
 <meta name="description" content="What is changing around any address in Den Haag: road works, closures, permits, events and weather, refreshed daily from open government data.">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("cd-theme")||"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
@@ -15,7 +17,7 @@
 
 <header class="bar">
   <a class="brand" href="./" aria-label="CityDelta home">
-    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="#ffc917" stroke-width="3" stroke-dasharray="5 4"/><circle cx="20" cy="20" r="9.5" fill="#ffc917"/><circle cx="20" cy="20" r="3.6" fill="#1a4fa0"/></svg>
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="9" fill="#ffc917"/><path d="M6 32V20h5v-5h4v17h2V9h7v23h2V17h4v4h4v11Z" fill="#13202b"/><path d="M19.5 12h2v2h-2zM19.5 16h2v2h-2zM19.5 20h2v2h-2zM28.5 20h1.5v1.5h-1.5z" fill="#ffc917"/><rect x="5" y="32" width="30" height="2.4" rx="1.2" fill="#13202b"/></svg>
     <span class="name">CityDelta</span>
     <span class="city" id="cityName">Den Haag</span>
   </a>
@@ -24,7 +26,10 @@
     <input id="q" type="search" placeholder="Search an address or postcode" aria-autocomplete="list" aria-controls="suggest">
     <ul id="suggest" class="suggest" role="listbox" hidden></ul>
   </form>
-  <p class="asof" id="asof">Loading today's data</p>
+  <div class="right">
+    <p class="asof" id="asof">Loading today's data</p>
+    <button class="theme" id="theme" type="button" aria-label="Switch to dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/><g class="sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg><span id="themeLbl">Dark</span></button>
+  </div>
 </header>
 
 <main class="app">
@@ -62,29 +67,6 @@
   </section>
 </main>
 
-<section class="band rhythm" aria-labelledby="hRhythm">
-  <div class="inner">
-    <h2 id="hRhythm">The city this month</h2>
-    <p class="lead" id="rhythmLead">Daily activity across the whole city, not only your radius.</p>
-    <div class="charts">
-      <figure class="card">
-        <figcaption id="capWorks">Road works active per day, next 14 days</figcaption>
-        <div class="fig" id="figWorks"></div>
-        <p class="key"><span><i class="sw works"></i>Works without closure</span><span><i class="sw closed"></i>Road closed</span></p>
-      </figure>
-      <figure class="card">
-        <figcaption id="capWeekly">New official notices per week</figcaption>
-        <div class="fig" id="figWeekly"></div>
-        <p class="key" id="keyWeekly"></p>
-      </figure>
-      <figure class="card wide">
-        <figcaption id="capWeather">Next 7 days of weather</figcaption>
-        <div class="fig short" id="figWeather"></div>
-        <p class="key"><span><i class="sw temp"></i>Temperature °C</span><span><i class="sw rain"></i>Chance of rain %</span><span><i class="sw risk"></i>Rain risk, 60% or more</span></p>
-      </figure>
-    </div>
-  </div>
-</section>
 
 <section class="band health" aria-labelledby="hHealth">
   <div class="inner">
@@ -99,7 +81,8 @@
     </ol>
     <div class="checks">
       <h3 id="checksTitle">Data checks</h3>
-      <div class="scroll"><table class="stack" id="checks"><thead><tr><th>Source</th><th>Check</th><th>Value</th><th>Threshold</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+      <p class="lead small">Each check has an alert rule. When a value crosses it, the status changes from OK to warning or failure, and the problem shows up here the same morning.</p>
+      <div class="scroll"><table class="stack" id="checks"><thead><tr><th>Source</th><th>Check</th><th class="num">Value</th><th>Alert rule</th><th>Status</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </section>
