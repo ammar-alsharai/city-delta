@@ -1,0 +1,673 @@
+{
+  "datasets": [
+    {
+      "name": "86acc01c",
+      "displayName": "around_me",
+      "queryLines": [
+        "WITH place AS (\r\n",
+        "  SELECT place_name, p_lat, p_lon\r\n",
+        "  FROM VALUES\r\n",
+        "    ('Den Haag Centraal', 52.0809, 4.3248),\r\n",
+        "    ('Den Haag HS',       52.0697, 4.3225),\r\n",
+        "    ('Binnenhof / Plein', 52.0799, 4.3131),\r\n",
+        "    ('Scheveningen',      52.1115, 4.2786),\r\n",
+        "    ('Statenkwartier',    52.0890, 4.2860),\r\n",
+        "    ('Laakkwartier',      52.0680, 4.3360),\r\n",
+        "    ('Ypenburg',          52.0440, 4.3650)\r\n",
+        "  AS p(place_name, p_lat, p_lon)\r\n",
+        "  WHERE place_name = :place\r\n",
+        "),\r\n",
+        "win AS (\r\n",
+        "  SELECT\r\n",
+        "    CASE :period\r\n",
+        "      WHEN 'Today' THEN current_date()\r\n",
+        "      WHEN 'This weekend' THEN\r\n",
+        "        CASE WHEN dayofweek(current_date()) = 1 THEN date_sub(current_date(), 1)   -- Sunday: weekend started yesterday\r\n",
+        "             ELSE next_day(date_sub(current_date(), 1), 'SA') END                  -- next Saturday (or today)\r\n",
+        "      ELSE current_date()                                                          -- 'Next 7 days'\r\n",
+        "    END AS w_start\r\n",
+        "),\r\n",
+        "win2 AS (\r\n",
+        "  SELECT w_start,\r\n",
+        "         CASE :period WHEN 'Today' THEN w_start\r\n",
+        "                      WHEN 'This weekend' THEN date_add(w_start, 1)\r\n",
+        "                      ELSE date_add(w_start, 6) END AS w_end\r\n",
+        "  FROM win\r\n",
+        "),\r\n",
+        "dist AS (\r\n",
+        "  SELECT h.*, w.w_start, w.w_end,\r\n",
+        "         2 * 6371000 * asin(sqrt(\r\n",
+        "             pow(sin(radians(h.lat - p.p_lat) / 2), 2) +\r\n",
+        "             cos(radians(p.p_lat)) * cos(radians(h.lat)) *\r\n",
+        "             pow(sin(radians(h.lon - p.p_lon) / 2), 2))) AS distance_m\r\n",
+        "  FROM city_lens.gold.happenings_enriched h\r\n",
+        "  CROSS JOIN place p\r\n",
+        "  CROSS JOIN win2 w\r\n",
+        "  WHERE h.location_ok\r\n",
+        ")\r\n",
+        "SELECT\r\n",
+        "  happening_id,\r\n",
+        "  initcap(replace(category, '_', ' '))                  AS category_label,\r\n",
+        "  stage, title, description, lat, lon,\r\n",
+        "  CAST(round(distance_m) AS INT)                        AS distance_m,\r\n",
+        "  coalesce(date_format(start_local, 'd MMM'), date_format(published_date, 'd MMM')) AS from_date,\r\n",
+        "  date_format(end_local, 'd MMM')                       AS to_date,\r\n",
+        "  status, url,\r\n",
+        "  concat_ws(' · ',\r\n",
+        "    CASE WHEN badge_rain_risk      THEN concat('Rain ', day_rain_pct, '%') END,\r\n",
+        "    CASE WHEN badge_closure_nearby THEN 'Closure nearby' END,\r\n",
+        "    CASE WHEN badge_permit_only    THEN 'Permit only' END)              AS badges,\r\n",
+        "  CASE WHEN closure_level = 'road_closed' THEN 1 ELSE 0 END             AS is_closure,\r\n",
+        "  CASE WHEN category IN ('event_permit', 'road_event') THEN 1 ELSE 0 END AS is_event,\r\n",
+        "  CASE WHEN badge_rain_risk THEN 1 ELSE 0 END                           AS is_rain_risk\r\n",
+        "FROM dist\r\n",
+        "WHERE distance_m <= :radius_km * 1000\r\n",
+        "  AND (\r\n",
+        "        (time_basis = 'scheduled' AND to_date(start_local) <= w_end AND to_date(end_local) >= w_start)\r\n",
+        "     OR (time_basis = 'published' AND published_date >= date_sub(current_date(), 30))\r\n",
+        "      )"
+      ],
+      "parameters": [
+        {
+          "displayName": "place",
+          "keyword": "place",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Den Haag Centraal"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "period",
+          "keyword": "period",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Next 7 days"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "radius_km",
+          "keyword": "radius_km",
+          "dataType": "DECIMAL",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DECIMAL",
+              "values": [
+                {
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4a0fa1b1",
+      "displayName": "weather_today",
+      "queryLines": [
+        "SELECT max_rain_pct, max_temp_c\r\n",
+        "FROM city_lens.gold.daily_activity\r\n",
+        "WHERE city_key = 'den_haag' AND day = current_date()"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "9a9335ba",
+      "displayName": "Around me",
+      "layout": [
+        {
+          "widget": {
+            "name": "place",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_place",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "parameters": [
+                    {
+                      "name": "place",
+                      "keyword": "place"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Place",
+                  "fields": []
+                }
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "place",
+                    "queryName": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_place"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "period",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_period",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "parameters": [
+                    {
+                      "name": "period",
+                      "keyword": "period"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Period",
+                  "fields": []
+                }
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "period",
+                    "queryName": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_period"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "c095a42e",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_radius_km",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "parameters": [
+                    {
+                      "name": "radius_km",
+                      "keyword": "radius_km"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "radius_km",
+                    "queryName": "parameter_dashboards/01f1e812683c1125a222d63148ff8888/datasets/01f1e812ec441f20a4f6181d92867e13_radius_km"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "happenings-nearby",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "fields": [
+                    {
+                      "name": "count(happening_id)",
+                      "expression": "COUNT(`happening_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Happenings nearby",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(happening_id)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "road-closures",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "fields": [
+                    {
+                      "name": "sum(is_closure)",
+                      "expression": "SUM(`is_closure`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Road closures",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(is_closure)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "events",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "fields": [
+                    {
+                      "name": "sum(is_event)",
+                      "expression": "SUM(`is_event`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Events",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(is_event)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "max-rain-chance-today",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "4a0fa1b1",
+                  "fields": [
+                    {
+                      "name": "max(max_rain_pct)",
+                      "expression": "MAX(`max_rain_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Max rain chance today (%)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "max(max_rain_pct)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 1,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "around-me",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "fields": [
+                    {
+                      "name": "category_label",
+                      "expression": "`category_label`"
+                    },
+                    {
+                      "name": "lat",
+                      "expression": "`lat`"
+                    },
+                    {
+                      "name": "lon",
+                      "expression": "`lon`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "badges",
+                      "expression": "`badges`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Around me",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "symbol-map",
+              "encodings": {
+                "coordinates": {
+                  "latitude": {
+                    "fieldName": "lat"
+                  },
+                  "longitude": {
+                    "fieldName": "lon"
+                  }
+                },
+                "color": {
+                  "fieldName": "category_label",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "title"
+                  },
+                  {
+                    "fieldName": "badges"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "whats-happening-near-this-place-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "86acc01c",
+                  "fields": [
+                    {
+                      "name": "category_label",
+                      "expression": "`category_label`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "badges",
+                      "expression": "`badges`"
+                    },
+                    {
+                      "name": "distance_m",
+                      "expression": "`distance_m`"
+                    },
+                    {
+                      "name": "from_date",
+                      "expression": "`from_date`"
+                    },
+                    {
+                      "name": "to_date",
+                      "expression": "`to_date`"
+                    },
+                    {
+                      "name": "url",
+                      "expression": "`url`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "ASC",
+                      "expression": "`distance_m`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "What's happening near this place",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "category_label"
+                  },
+                  {
+                    "fieldName": "title"
+                  },
+                  {
+                    "fieldName": "badges"
+                  },
+                  {
+                    "fieldName": "distance_m"
+                  },
+                  {
+                    "fieldName": "from_date"
+                  },
+                  {
+                    "fieldName": "to_date"
+                  },
+                  {
+                    "fieldName": "url",
+                    "useForSearch": false,
+                    "displayName": "Source",
+                    "actions": {
+                      "click": {
+                        "type": "link",
+                        "urlTemplate": "https://www.databricks.com/search?search={{ @ }}"
+                      }
+                    }
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column",
+                    "field": {
+                      "index": 3
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 4,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "da824504",
+            "spec": {
+              "widgetType": "text",
+              "version": 1,
+              "encodings": {
+                "text": {
+                  "lines": [
+                    "Independent project, not affiliated with Gemeente Den Haag. Information only.\n",
+                    "\n",
+                    "Sources: Officiële bekendmakingen (KOOP) · NDW Melvin (CC0) · Weather data by Open-Meteo.com (CC BY 4.0).\n",
+                    "\n",
+                    "Notices show the last 30 days; the period filter applies to road works and road events."
+                  ],
+                  "fields": []
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 12,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
